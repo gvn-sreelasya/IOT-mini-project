@@ -1,0 +1,177 @@
+#include &lt;ESP8266WiFi.h&gt;
+
+WiFiClient client;
+String apiKey = &quot;CERSZJ9VFJTNQDVR&quot;; // Enter your Write API key from ThingSpeak
+
+WiFiServer server(80);
+const char* ssid = &quot;<wifi username>&quot;;
+const char* password = &quot;<wifi password>&quot;;
+String command =&quot;&quot;; // Command received from Android device
+const char* servert = &quot;api.thingspeak.com&quot;;
+// Set Motor Control Pins
+int rightMotor2 = 13; // D7 - right Motor -
+int rightMotor1 = 15; // D8 - right Motor +
+int leftMotor2 = 4; // D3 - left Motor -
+int leftMotor1 = 10; // D4 - left Motor +
+int ldr=A0;
+int x;
+int h;
+
+void setup()
+{
+Serial.begin(115200);
+
+pinMode(leftMotor1, OUTPUT);
+pinMode(leftMotor2, OUTPUT);
+pinMode(rightMotor1, OUTPUT);
+pinMode(rightMotor2, OUTPUT);
+pinMode(14, OUTPUT);
+pinMode(ldr,INPUT);
+digitalWrite(leftMotor1,LOW);
+digitalWrite(leftMotor2,LOW);
+digitalWrite(rightMotor1,LOW);
+digitalWrite(rightMotor2,LOW);
+
+connectWiFi();
+server.begin();
+
+}
+
+void loop()
+{
+x=analogRead(ldr);
+h=0;
+
+client = server.available();
+
+if (!client) {
+Serial.println(x);
+
+if (x&lt;180){
+Serial.println(&quot;fuse is gone&quot;);
+digitalWrite(14, HIGH);
+h=0;
+
+if (client.connect(servert,80)) // &quot;184.106.153.149&quot; or api.thingspeak.com
+{
+
+String postStr = apiKey;
+postStr +=&quot;&amp;field1=&quot;;
+postStr += String(x);
+postStr +=&quot;&amp;field2=&quot;;
+postStr += String(h);
+postStr += &quot;\r\n\r\n&quot;;
+
+client.print(&quot;POST /update HTTP/1.1\n&quot;);
+client.print(&quot;Host: api.thingspeak.com\n&quot;);
+client.print(&quot;Connection: close\n&quot;);
+client.print(&quot;X-THINGSPEAKAPIKEY: &quot;+apiKey+&quot;\n&quot;);
+client.print(&quot;Content-Type: application/x-www-form-urlencoded\n&quot;);
+client.print(&quot;Content-Length: &quot;);
+client.print(postStr.length());
+
+client.print(&quot;\n\n&quot;);
+client.print(postStr);
+
+}
+client.stop();
+}
+return;
+
+}
+
+command = checkClient ();
+
+if (command == &quot;forward&quot; || command == &quot;upwards&quot; || command == &quot;up&quot;) leftMotor();
+else if (command == &quot;reverse&quot; || command == &quot;downwards&quot;|| command == &quot;down&quot;) {
+forwardMotor();
+}
+else if (command == &quot;left&quot; || command == &quot;bulb on&quot;) reverseMotor();
+else if (command == &quot;right&quot; || command == &quot;bulb off&quot;) rightMotor();
+else if (command == &quot;stop&quot; || command == &quot;switch off&quot; ) {
+stopMotor();
+
+}
+
+sendBackEcho(command); // send command echo back to android device
+command = &quot;&quot;;
+}
+
+void forwardMotor(void)
+{
+digitalWrite(rightMotor1,HIGH);
+digitalWrite(rightMotor2,LOW);
+}
+
+void reverseMotor(void)
+{
+digitalWrite(leftMotor1,LOW);
+digitalWrite(leftMotor2,HIGH);
+}
+
+void leftMotor(void)
+{
+
+digitalWrite(rightMotor1,LOW);
+digitalWrite(rightMotor2,HIGH);
+delay(2000);
+}
+
+void rightMotor(void)
+{
+digitalWrite(leftMotor1,HIGH);
+digitalWrite(leftMotor2,LOW);
+delay(2000);
+}
+
+void stopMotor(void)
+{
+digitalWrite(14,LOW);
+digitalWrite(leftMotor1,LOW);
+digitalWrite(leftMotor2,LOW);
+digitalWrite(rightMotor1,LOW);
+digitalWrite(rightMotor2,LOW);
+}
+
+/* connecting WiFi */
+void connectWiFi()
+{
+Serial.println(&quot;Connecting to WIFI&quot;);
+
+WiFi.begin(ssid, password);
+while ((!(WiFi.status() == WL_CONNECTED)))
+{
+delay(300);
+Serial.print(&quot;..&quot;);
+}
+Serial.println(&quot;&quot;);
+Serial.println(&quot;WiFi connected&quot;);
+Serial.println(&quot;NodeMCU Local IP is : &quot;);
+Serial.print((WiFi.localIP()));
+}
+
+/* check command received from Android Device */
+String checkClient (void)
+{
+while(!client.available()) delay(1);
+String request = client.readStringUntil(&#39;\r&#39;);
+request.remove(0, 5);
+request.remove(request.length()-9,9);
+return request;
+}
+
+/* send command echo back to android device */
+void sendBackEcho(String echo)
+{
+client.println(&quot;HTTP/1.1 200 OK&quot;);
+client.println(&quot;Content-Type: text/html&quot;);
+client.println(&quot;&quot;); // command from android to nodemcu....... u
+need to get an echo
+client.println(&quot;&lt;!DOCTYPE HTML&gt;&quot;);
+client.println(&quot;&lt;html&gt;&quot;);
+client.println(echo);
+client.println(&quot;&lt;/html&gt;&quot;);
+client.stop();
+
+delay(1);
+}
